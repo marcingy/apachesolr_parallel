@@ -1,6 +1,5 @@
 <?php
 
-
 function apachesolr_parallel_form_apachesolr_settings_alter(&$form, &$form_state) {
   // Number of Items to index
   $num_cpu_options = drupal_map_assoc(array(1, 2, 3, 4, 5, 6, 7, 8));
@@ -104,6 +103,7 @@ function apachesolr_parallel_index_entities_document_wrapper($rows = array(), $e
     $documents = array_merge($documents_row, $documents);
   }
   $indexed = apachesolr_index_send_to_solr($env_id, $documents);
+  $documents_submitted = 0;
   if ($indexed !== FALSE) {
     $documents_submitted = count($documents);
   }
@@ -196,7 +196,7 @@ function apachesolr_parallel_index_entities($env_id, $limit) {
   }
   // Enable all caching again
   apachesolr_parallel_cache_enable();
-  
+
   return $documents_submitted;
 }
 
@@ -306,20 +306,28 @@ function apachesolr_parallel_index_get_entities_to_index($env_id, $entity_type, 
 
 function apachesolr_parallel_cache_disable() {
   if (!class_exists('DrupalFakeCache')) {
-    $cache_backends = variable_get('cache_backends', array());
-    $cache_backends[] = 'includes/cache-install.inc';
-    variable_set('cache_backends', $cache_backends);
+    $GLOBALS['conf']['cache_backends'][] = 'includes/cache-install.inc';
   }
-  // Default to throwing away cache data
-  variable_set('cache_default_class','DrupalFakeCache');
+  // Store the existing cache value if available.
+  foreach (array('cache_default_class', 'cache_class_cache_form') as $cache) {
+    if (isset($GLOBALS['conf'][$cache])) {
+      $GLOBALS['conf'][$cache . '_original'] = $GLOBALS['conf'][$cache];
+    }
+  }
+  $GLOBALS['conf']['cache_default_class'] = 'DrupalFakeCache';
   // Rely on the DB cache for form caching - otherwise forms fail.
-  variable_set('cache_class_cache_form', 'DrupalDatabaseCache');
+  $GLOBALS['conf']['cache_class_cache_form'] = 'DrupalDatabaseCache';
 }
 
 function apachesolr_parallel_cache_enable() {
-  // Default to throwing away cache data
-  variable_del('cache_default_class');
-  // Rely on the DB cache for form caching - otherwise forms fail.
-  variable_del('cache_class_cache_form');
+  // Reset the original cache.
+  foreach (array('cache_default_class', 'cache_class_cache_form') as $cache) {
+    if (isset($GLOBALS['conf'][$cache  . '_original'])) {
+      $GLOBALS['conf'][$cache] = $GLOBALS['conf'][$cache  . '_original'];
+    }
+    else {
+      unset($GLOBALS['conf'][$cache]);
+    }
+  }
 }
 
