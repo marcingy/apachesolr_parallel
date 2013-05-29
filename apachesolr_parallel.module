@@ -86,7 +86,7 @@ function apachesolr_parallel_index_batch_index_entities($env_id, &$context) {
 /**
  * Wrapper for indexing the documents so our httprl callback is simple to
  * understand.
- * 
+ *
  * @param type $rows
  * @param type $entity_type
  * @param type $env_id
@@ -136,57 +136,63 @@ function apachesolr_parallel_index_entities($env_id, $limit) {
     // With each pass through the callback, retrieve the next group of nids.
     //$rows = apachesolr_parallel_index_get_entities_to_index($env_id, $entity_type, $limit, 0);
     //$rows_all_threads = array_chunk($rows, $amount_per_thread);
-
+    $data_to_process = FALSE;
     for ($i = 0; $i < $amount_of_threads; $i++) {
       $rows_in_thread = apachesolr_parallel_index_get_entities_to_index($env_id, $entity_type, $amount_per_thread, $amount_per_thread * $i);
-      $return_values[$i] = '';
-      # the return value will be stored in here, so make sure there's something
-      $callback_options = array(
-        array(
-          # this function will be called in parallel
-          'function' => 'apachesolr_parallel_index_entities_document_wrapper',
-          # its return value will be placed here
-          'return' => &$return_values[$i],
-        ),
-        # pass this as an argument to the callback
-        $rows_in_thread,
-        $entity_type,
-        $env_id,
-      );
-      # queue the callback
-      httprl_queue_background_callback($callback_options);
+      if (!empty($rows_in_thread)) {
+        $data_to_process = TRUE;
+        $return_values[$i] = '';
+        # the return value will be stored in here, so make sure there's something
+        $callback_options = array(
+          array(
+            # this function will be called in parallel
+            'function' => 'apachesolr_parallel_index_entities_document_wrapper',
+            # its return value will be placed here
+            'return' => &$return_values[$i],
+          ),
+          # pass this as an argument to the callback
+          $rows_in_thread,
+          $entity_type,
+          $env_id,
+        );
+        # queue the callback
+        httprl_queue_background_callback($callback_options);
 
-      // Set our new position
-      foreach ($rows_in_thread as $row) {
-        if (!empty($row->status)) {
-          if ($row->changed > $max_changed) {
-            $max_changed = $row->changed;
-          }
-          if ($row->entity_id > $max_entity_id) {
-            $max_entity_id = $row->entity_id;
+        // Set our new position
+        foreach ($rows_in_thread as $row) {
+          if (!empty($row->status)) {
+            if ($row->changed > $max_changed) {
+              $max_changed = $row->changed;
+            }
+            if ($row->entity_id > $max_entity_id) {
+              $max_entity_id = $row->entity_id;
+            }
           }
         }
       }
     }
-    // Set long time-outs since we can wait patiently
-    // Make sure our calculation of timeouts is defined by the amount of cpus
-    $timeout = 360;
-    $global_timeout = 360 * $amount_of_threads;
 
-    $options = array(
-      'global_timeout' => $global_timeout,
-      'timeout' => $timeout,
-    );
-    httprl_set_default_options($options);
+    if ($data_to_process) {
+      // Set long time-outs since we can wait patiently
+      // Make sure our calculation of timeouts is defined by the amount of cpus
+      $timeout = 360;
+      $global_timeout = 360 * $amount_of_threads;
 
-    $response = httprl_send_request($fp = NULL, $url = '', $request = '', $options);
-    if ($response === FALSE) {
-      return $documents_submitted;
-    }
+      $options = array(
+        'global_timeout' => $global_timeout,
+        'timeout' => $timeout,
+      );
+      httprl_set_default_options($options);
 
-    foreach ($return_values as $documents_submitted_per_thread) {
-      if (!empty($documents_submitted_per_thread)) {
-        $documents_submitted += $documents_submitted_per_thread;
+      $response = httprl_send_request($fp = NULL, $url = '', $request = '', $options);
+      if ($response === FALSE) {
+        return $documents_submitted;
+      }
+
+      foreach ($return_values as $documents_submitted_per_thread) {
+        if (!empty($documents_submitted_per_thread)) {
+          $documents_submitted += $documents_submitted_per_thread;
+        }
       }
     }
 
@@ -279,7 +285,7 @@ function apachesolr_parallel_index_get_entities_to_index($env_id, $entity_type, 
   extract(apachesolr_get_last_index_position($env_id, $entity_type));
 
   // We can't use PDO in httprl apparently...
-  
+
   // Find the next batch of entities to index for this entity type.  Note that
   // for ordering we're grabbing the oldest first and then ordering by ID so
   // that we get a definitive order.
@@ -330,4 +336,3 @@ function apachesolr_parallel_cache_enable() {
     }
   }
 }
-
