@@ -93,6 +93,8 @@ function apachesolr_parallel_index_batch_index_entities($env_id, &$context) {
  * @return type
  */
 function apachesolr_parallel_index_entities_document_wrapper($rows = array(), $entity_type = 'node', $env_id = 'solr') {
+  // Disable all caching
+  apachesolr_parallel_cache_disable();
   module_load_include('inc', 'apachesolr', 'apachesolr.index');
   $documents = array();
   // We explicitely do not work with excludes or other hook invocations
@@ -107,6 +109,10 @@ function apachesolr_parallel_index_entities_document_wrapper($rows = array(), $e
   if ($indexed !== FALSE) {
     $documents_submitted = count($documents);
   }
+
+  // Enable all caching again
+  apachesolr_parallel_cache_enable();
+
   return $documents_submitted;
 }
 
